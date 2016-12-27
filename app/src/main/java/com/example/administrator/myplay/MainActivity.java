@@ -84,9 +84,7 @@ public class MainActivity extends AppCompatActivity {
                 }
         }
 
-
                 playSound(audioFile.getAbsolutePath());
-
  }
 //    停止录音
 //    public void stopAndRelease() {
