@@ -5,6 +5,7 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.Environment;
+import android.os.Handler;
 import android.support.annotation.IdRes;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
@@ -27,12 +28,33 @@ public class MainActivity extends AppCompatActivity {
     private File audioFile;
     private File fpath;
 
+    private int BASE = 600;
+    private int SPACE = 200;// 间隔取样时间
+
+
+    private final Handler mHandler = new Handler(){
+        public void handleMessage(android.os.Message msg) {
+            int what=msg.what;
+            //根据mHandler发送what的大小决定话筒的图片是哪一张
+            //说话声音越大,发送过来what值越大
+            if(what>13){
+                what=13;
+            }
+        };
+    };
+    private Runnable mUpdateMicStatusTimer = new Runnable() {
+        public void run() {
+            updateMicStatus();
+        }
+    };
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 1);
+//        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 1);
 
         fpath = new File(Environment.getExternalStorageDirectory()
                 .getAbsolutePath() + "/data/files/");
@@ -63,12 +85,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
 
-        findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
                 playSound(audioFile.getAbsolutePath());
-            }
-        });
+
  }
 //    停止录音
 //    public void stopAndRelease() {
@@ -81,19 +99,19 @@ public class MainActivity extends AppCompatActivity {
     //播放
     public  void playSound(String filePath) {
 
-//      mediaRecorder.stop();
-//        if (mMediaPlayer == null) {
-//            mMediaPlayer = new MediaPlayer();
-//            mMediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
-//                @Override
-//                public boolean onError(MediaPlayer mp, int what, int extra) {
-//                    mMediaPlayer.reset();
-//                    return false;
-//                }
-//            });
-//        } else {
-//            mMediaPlayer.reset();
-//        }
+      mediaRecorder.stop();
+        if (mMediaPlayer == null) {
+            mMediaPlayer = new MediaPlayer();
+            mMediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                @Override
+                public boolean onError(MediaPlayer mp, int what, int extra) {
+                    mMediaPlayer.reset();
+                    return false;
+                }
+            });
+        } else {
+            mMediaPlayer.reset();
+        }
         try {
             mMediaPlayer.setDataSource(filePath);
             mMediaPlayer.prepare();
@@ -108,4 +126,19 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
+    private void updateMicStatus() {
+        if(mediaRecorder!=null){
+            int ratio = mediaRecorder.getMaxAmplitude(); //BASE;
+            int db = 0;// 分贝
+            if (ratio > 1)
+                db = (int) (20 * Math.log10(ratio));
+            System.out.println("分贝值："+db+"     "+Math.log10(ratio));
+            //我对着手机说话声音最大的时候，db达到了35左右，
+            mHandler.postDelayed(mUpdateMicStatusTimer, SPACE);
+//         所以除了2，为的就是对应14张图片
+//            mHandler.sendEmptyMessage(db/2);
+        }
+    }
+
 }
