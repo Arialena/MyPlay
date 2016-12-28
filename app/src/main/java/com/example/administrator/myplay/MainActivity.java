@@ -6,6 +6,7 @@ import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Message;
 import android.support.annotation.IdRes;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
@@ -17,6 +18,7 @@ import android.view.View;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -29,7 +31,10 @@ public class MainActivity extends AppCompatActivity {
     private File fpath;
 
     private int BASE = 600;
-    private int SPACE = 200;// 间隔取样时间
+    private int SPACE = 2000;// 间隔取样时间
+    private int db = 0;
+
+    private Thread dbThread;
 
 
     private final Handler mHandler = new Handler(){
@@ -37,15 +42,11 @@ public class MainActivity extends AppCompatActivity {
             int what=msg.what;
             //根据mHandler发送what的大小决定话筒的图片是哪一张
             //说话声音越大,发送过来what值越大
-            if(what>13){
-                what=13;
+            Log.d("===>", "db = " + db);
+            if(what < 30 && db > 0){
+                playSound(audioFile.getAbsolutePath());
             }
         };
-    };
-    private Runnable mUpdateMicStatusTimer = new Runnable() {
-        public void run() {
-            updateMicStatus();
-        }
     };
 
 
@@ -68,36 +69,52 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
 
-        if(mediaRecorder == null) {
+        while (true){
+            if(mediaRecorder == null) {
 
-                mediaRecorder = new MediaRecorder();
-                mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-                mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-                mediaRecorder.setOutputFile(String.valueOf(audioFile));
-                mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+            mediaRecorder = new MediaRecorder();
+            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+            mediaRecorder.setOutputFile(String.valueOf(audioFile));
+            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
 
-                try {
-                    mediaRecorder.prepare();
-                    mediaRecorder.start();
-                } catch (IOException e) {
-                    Log.e(LOG_TAG, "prepare() failed");
-                }
-        }
+            try {
+                mediaRecorder.prepare();
+                mediaRecorder.start();
+                Log.d("===>", "开始录音");
+                dbThread = new Thread() {
+                    @Override
+                    public void run() {
+                        while (true) {
+                            try {
+                                sleep(SPACE);
+                            } catch (InterruptedException e) {
 
-                playSound(audioFile.getAbsolutePath());
+                            }
+                            updateMicStatus();
+                        }
+                    }
+                };
+                dbThread.start();
+
+            } catch (IOException e) {
+                Log.e(LOG_TAG, "prepare() failed");
+            }
+        }}
  }
-//    停止录音
-//    public void stopAndRelease() {
-//        if (mediaRecorder == null) return;
-//
-//        mediaRecorder.release();
-//        mediaRecorder = null;
-//    }
+
+    public void stopRecord() {
+        mediaRecorder.stop();
+        mediaRecorder.reset();
+        mediaRecorder.release();
+        mediaRecorder = null;
+    }
 
     //播放
     public  void playSound(String filePath) {
 
-      mediaRecorder.stop();
+        Log.d("===>", "停止录音，开始播放");
+      stopRecord();
         if (mMediaPlayer == null) {
             mMediaPlayer = new MediaPlayer();
             mMediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
@@ -109,34 +126,33 @@ public class MainActivity extends AppCompatActivity {
             });
         } else {
             mMediaPlayer.reset();
-        }
-        try {
-            mMediaPlayer.setDataSource(filePath);
-            mMediaPlayer.prepare();
-            mMediaPlayer.start();
-        } catch (IllegalArgumentException e) {
-            e.printStackTrace();
-        } catch (SecurityException e) {
-            e.printStackTrace();
-        } catch (IllegalStateException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    }
+    try {
+        mMediaPlayer.setDataSource(filePath);
+        mMediaPlayer.prepare();
+        mMediaPlayer.start();
+    } catch (IllegalArgumentException e) {
+        e.printStackTrace();
+    } catch (SecurityException e) {
+        e.printStackTrace();
+    } catch (IllegalStateException e) {
+        e.printStackTrace();
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
     }
 
     private void updateMicStatus() {
-        if(mediaRecorder!=null){
-            int ratio = mediaRecorder.getMaxAmplitude(); //BASE;
-            int db = 0;// 分贝
+        if(mediaRecorder != null){
+            int ratio = mediaRecorder.getMaxAmplitude() / 100; //BASE;
+            Log.d("===>", "ratio：" + ratio);
             if (ratio > 1)
                 db = (int) (20 * Math.log10(ratio));
-            System.out.println("分贝值："+db+"     "+Math.log10(ratio));
             //我对着手机说话声音最大的时候，db达到了35左右，
-            mHandler.postDelayed(mUpdateMicStatusTimer, SPACE);
-//         所以除了2，为的就是对应14张图片
-//            mHandler.sendEmptyMessage(db/2);
+            Log.d("===>", "取出分贝值：" + db);
+            Message message = new Message();
+            message.what = db;
+            mHandler.sendMessage(message);
         }
     }
-
 }
